@@ -142,7 +142,7 @@
     player.spawnY = GROUND_Y - player.h;
   }
 
-  function resetGame() {
+  function resetGame(fullReset = true) {
     map = blankMap();
     pipes = [];
     coins = [];
@@ -154,9 +154,9 @@
     blockBounce = new Map();
     cameraX = 0;
     state = "playing";
-    score = 0;
-    coinCount = 0;
-    lives = 3;
+    score = fullReset ? 0 : score;
+    coinCount = fullReset ? 0 : coinCount;
+    lives = fullReset ? 3 : lives;
     elapsed = 0;
     hintTimer = 7;
     goalX = 211 * TILE;
@@ -232,7 +232,10 @@
       checkpointTile: 2,
       form: 'small',
       fireCooldown: 0,
-      poleTimer: 0
+      poleTimer: 0,
+      deathTimer: 0,
+      deathFromPit: false,
+      runningJump: false
     };
   }
 
@@ -328,10 +331,18 @@
 
     if (tile === QUESTION_COIN) {
       map[row][col] = USED_BLOCK;
-      coinCount += 1;
-      score += 200;
-      popups.push({ type: 'coin', x: col * TILE + 6, y: row * TILE, vy: -150, life: 0.8 });
-      sound.coin();
+      coins.push({
+        x: col * TILE + TILE / 2,
+        y: row * TILE - 10,
+        r: 10,
+        spin: 0,
+        falling: true,
+        vy: -150,
+        bounces: 0,
+        spawnAge: 0,
+        value: 200
+      });
+      tone(520, 0.06, 'square', 0.035);
     } else if (tile === QUESTION_POWER) {
       map[row][col] = USED_BLOCK;
       const type = player.form === 'small' ? 'mushroom' : 'flower';
@@ -387,25 +398,6 @@
     sound.power();
   }
 
-  function respawnPlayer(fullReset = false) {
-    setPlayerForm('small');
-    player.x = player.spawnX;
-    player.y = player.spawnY;
-    player.vx = 0;
-    player.vy = 0;
-    player.hurtTimer = 1.5;
-    player.starTimer = 0;
-    cameraX = Math.max(0, player.spawnX - VIEW_W * 0.35);
-    if (fullReset) {
-      lives = 3;
-      player.checkpointTile = 2;
-      player.spawnX = 64;
-      player.x = player.spawnX;
-      player.y = player.spawnY;
-      resetEnemies();
-    }
-  }
-
   function hurtPlayer(enemy) {
     if (player.hurtTimer > 0 || player.starTimer > 0) return;
     if (player.form !== 'small') {
@@ -416,13 +408,24 @@
       sound.hurt();
       return;
     }
+
+    startDeath();
+  }
+
+  function startDeath(fromPit = false) {
+    if (state === 'death') return;
     lives -= 1;
-    player.hurtTimer = 1.5;
-    player.vx = player.x < enemy.x ? -170 : 170;
-    player.vy = -260;
+    state = 'death';
+    player.deathTimer = 0;
+    player.deathFromPit = fromPit;
+    player.vx = 0;
+    player.vy = fromPit ? Math.max(0, player.vy) : -560;
+    player.starTimer = 0;
+    player.hurtTimer = 0;
+    player.jumpBuffer = 0;
+    addParticles(player.x + player.w / 2, player.y + player.h / 2, '#ef4444', 14);
     sound.hurt();
-    if (lives <= 0) respawnPlayer(true);
-    else respawnPlayer(false);
+    tone(180, 0.45, 'triangle', 0.045, 0.08, 55);
   }
 
   function defeatEnemy(enemy) {
@@ -476,8 +479,21 @@
       return;
     }
 
+    if (state === 'death') {
+      player.deathTimer += dt;
+      player.y += player.vy * dt;
+      player.vy += GRAVITY * dt;
+      const fellOffScreen = !player.deathFromPit && player.y > VIEW_H + 80;
+      const pitDelayFinished = player.deathFromPit && player.deathTimer > 1.1;
+      if (fellOffScreen || pitDelayFinished) {
+        if (lives > 0) resetLevelKeepProgress();
+        else resetGame();
+      }
+      return;
+    }
+
     const acceleration = player.onGround ? 2300 : 1450;
-    const maxSpeed = keys.run ? 292 : 205;
+    const maxSpeed = keys.run ? 330 : 205;
     const move = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
 
     if (move !== 0) {
@@ -494,18 +510,21 @@
     player.coyote = player.onGround ? 0.11 : Math.max(0, player.coyote - dt);
     player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
     if (player.jumpBuffer > 0 && player.coyote > 0) {
-      player.vy = -760;
+      const runningJump = keys.run && Math.abs(player.vx) > 245;
+      player.runningJump = runningJump;
+      player.vy = runningJump ? -1040 : -755;
       player.onGround = false;
       player.coyote = 0;
       player.jumpBuffer = 0;
       sound.jump();
     }
-    if (!keys.jump && player.vy < -210) player.vy += 2600 * dt;
 
     player.vy = Math.min(850, player.vy + GRAVITY * dt);
+    if (!keys.jump && player.vy < -210 && !player.runningJump) player.vy += 2600 * dt;
     player.onGround = false;
     moveVertical(player, dt);
     moveHorizontal(player, dt);
+    if (player.onGround && player.vy >= 0) player.runningJump = false;
     player.walkTime += Math.abs(player.vx) * dt / 18;
 
     player.hurtTimer = Math.max(0, player.hurtTimer - dt);
@@ -523,10 +542,8 @@
       player.spawnX = nextTile * TILE;
     }
     if (player.y > VIEW_H + 120) {
-      lives -= 1;
-      sound.hurt();
-      if (lives <= 0) resetGame();
-      else respawnPlayer(false);
+      startDeath(true);
+      return;
     }
 
     if (player.x + player.w >= goalX) {
@@ -558,7 +575,7 @@
         if (!isSolidAt(aheadX, enemy.y + enemy.h + 4)) enemy.vx *= -1;
       }
 
-      if (enemy.y > VIEW_H + 120 || !intersects(player, enemy)) continue;
+      if (state !== 'playing' || enemy.y > VIEW_H + 120 || !intersects(player, enemy)) continue;
       const playerBottom = player.y + player.h;
       if (player.starTimer > 0) defeatEnemy(enemy);
       else if (player.vy > 80 && playerBottom - enemy.y < 20) {
@@ -593,16 +610,31 @@
   function updateCoins(dt) {
     for (const coin of coins) {
       coin.spin += dt * 5;
+      coin.spawnAge = (coin.spawnAge || 0) + dt;
+
+      if (coin.falling) {
+        coin.vy += GRAVITY * dt;
+        coin.y += coin.vy * dt;
+        const groundLevel = GROUND_Y - coin.r;
+        if (coin.y >= groundLevel) {
+          coin.y = groundLevel;
+          coin.vy = coin.bounces < 2 ? -230 : 0;
+          coin.bounces += 1;
+        }
+      }
+
       const box = { x: coin.x - coin.r, y: coin.y - coin.r, w: coin.r * 2, h: coin.r * 2 };
-      if (!coin.collected && intersects(player, box)) {
+      const playerHead = { x: player.x + 2, y: player.y, w: player.w - 4, h: 9 };
+      const hitsHead = intersects(playerHead, box) && coin.spawnAge > 0.28 && (coin.falling || player.vy < 0);
+      if (!coin.collected && hitsHead) {
         coin.collected = true;
         coinCount += 1;
-        score += 100;
+        score += coin.value || 100;
         addParticles(coin.x, coin.y, '#facc15', 8);
         sound.coin();
       }
     }
-    coins = coins.filter(coin => !coin.collected);
+    coins = coins.filter(coin => !coin.collected && (!coin.falling || coin.y < VIEW_H + 60));
   }
 
   function updateEffects(dt) {
@@ -988,6 +1020,9 @@
     if (state === 'pole') {
       pixelText('通关！', VIEW_W / 2, 130, '#fde047', 34, 'center');
     }
+    if (state === 'death') {
+      pixelText('坠落！', VIEW_W / 2, 170, '#fecaca', 34, 'center');
+    }
   }
 
   function render() {
@@ -996,6 +1031,16 @@
     drawEntities();
     drawHud();
     drawOverlay();
+  }
+
+  function resetLevelKeepProgress() {
+    const keptScore = score;
+    const keptCoins = coinCount;
+    const keptLives = lives;
+    resetGame(false);
+    score = keptScore;
+    coinCount = keptCoins;
+    lives = keptLives;
   }
 
   function setRunning(key, pressed) {
@@ -1055,7 +1100,7 @@
   function loop(now) {
     const dt = Math.min(0.033, (now - lastFrame) / 1000);
     lastFrame = now;
-    if (state === 'playing') update(dt);
+    if (state !== 'paused' && state !== 'won') update(dt);
     render();
     requestAnimationFrame(loop);
   }
