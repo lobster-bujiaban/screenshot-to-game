@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>像素原野跳跃</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: radial-gradient(circle at 50% 0%, #243b67 0, #111827 48%, #090d16 100%);
+      color: #fff7d6;
+    }
+    .shell { width: min(100%, 1040px); }
+    .titlebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(18px, 3vw, 28px);
+      letter-spacing: .08em;
+      color: #ffe082;
+      text-shadow: 3px 3px 0 #5b2a00;
+    }
+    .tips {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 13px;
+      text-align: right;
+    }
+    .stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 2 / 1;
+      overflow: hidden;
+      border: 6px solid #1f2937;
+      border-radius: 10px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.45), inset 0 0 0 3px #475569;
+      background: #5c94fc;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .touch-controls {
+      position: absolute;
+      inset: auto 0 0;
+      display: none;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 12px;
+      pointer-events: none;
+    }
+    .touch-group { display: flex; gap: 10px; pointer-events: auto; }
+    .touch-controls button {
+      width: 54px;
+      height: 44px;
+      border: 3px solid rgba(15,23,42,.8);
+      border-radius: 10px;
+      background: rgba(255,255,255,.78);
+      color: #0f172a;
+      font: 800 16px monospace;
+      touch-action: none;
+      user-select: none;
+    }
+    .touch-controls button:active { transform: translateY(2px); background: #fde68a; }
+    @media (pointer: coarse) { .touch-controls { display: flex; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="titlebar">
+      <h1>像素原野跳跃</h1>
+      <p class="tips">← → / A D 移动 · 空格跳跃 · Shift 奔跑 · X 火球 · P 暂停 · R 重开</p>
+    </div>
+    <section class="stage" aria-label="像素平台跳跃游戏">
+      <canvas id="game" width="960" height="480"></canvas>
+      <div class="touch-controls" aria-hidden="true">
+        <div class="touch-group">
+          <button type="button" data-hold="left">←</button>
+          <button type="button" data-hold="right">→</button>
+        </div>
+        <div class="touch-group">
+          <button type="button" data-hold="run">跑</button>
+          <button type="button" data-hold="jump">跳</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="./game.js" defer></script>
+</body>
+</html>
