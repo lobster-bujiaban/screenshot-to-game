@@ -310,36 +310,34 @@
         if (tileAtPixel(col * TILE + 1, (row + 1) * TILE - 1) !== EMPTY) {
           actor.y = (row + 1) * TILE + 0.01;
           actor.vy = 0;
-          if (actor === player) hitBlockAbove();
+          if (actor === player) hitBlockAbove(row, col);
           return;
         }
       }
     }
   }
 
-  function hitBlockAbove() {
-    const centerCol = Math.floor((player.x + player.w / 2) / TILE);
-    const row = Math.floor(player.y / TILE);
+  function hitBlockAbove(row, col) {
     if (row < 0 || row >= ROWS) return;
-    const tile = map[row][centerCol];
+    const tile = map[row][col];
     if (![BRICK, QUESTION_COIN, QUESTION_POWER].includes(tile)) return;
 
-    const key = centerCol + ',' + row;
+    const key = col + ',' + row;
     if (blockBounce.has(key)) return;
     blockBounce.set(key, 0.2);
 
     if (tile === QUESTION_COIN) {
-      map[row][centerCol] = USED_BLOCK;
+      map[row][col] = USED_BLOCK;
       coinCount += 1;
       score += 200;
-      popups.push({ type: 'coin', x: centerCol * TILE + 6, y: row * TILE, vy: -150, life: 0.8 });
+      popups.push({ type: 'coin', x: col * TILE + 6, y: row * TILE, vy: -150, life: 0.8 });
       sound.coin();
     } else if (tile === QUESTION_POWER) {
-      map[row][centerCol] = USED_BLOCK;
+      map[row][col] = USED_BLOCK;
       const type = player.form === 'small' ? 'mushroom' : 'flower';
       powerups.push({
         type,
-        x: centerCol * TILE + 6,
+        x: col * TILE + 6,
         y: type === 'flower' ? row * TILE : row * TILE - 22,
         w: 20,
         h: 20,
@@ -349,9 +347,9 @@
       });
       sound.power();
     } else if (player.form !== 'small') {
-      map[row][centerCol] = EMPTY;
+      map[row][col] = EMPTY;
       score += 50;
-      addParticles(centerCol * TILE + 16, row * TILE + 16, '#d6541f', 12);
+      addParticles(col * TILE + 16, row * TILE + 16, '#d6541f', 12);
       tone(140, 0.09, 'sawtooth', 0.04, 0, 70);
     }
   }
